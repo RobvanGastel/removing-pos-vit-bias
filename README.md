@@ -1,2 +1,2 @@
 # removing-pos-vit-bias
-Using Franca's RASA to remove positional bias in SSL pretrained ViTs.
+Using Franca's RASA to remove positional bias in of other SSL pretrained ViTs, since the original codebase is restricted to lightning and the Franca model. To measure the effect of removing positional bias.
