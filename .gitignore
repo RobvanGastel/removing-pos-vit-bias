@@ -1,2 +1,5 @@
 # Notebooks
 .ipynb_checkpoints/
+__pycache__/
+
+# Training data

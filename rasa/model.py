@@ -4,14 +4,14 @@ import torch.nn as nn
 
 class RASAHead(nn.Module):
     def __init__(self, input_dim, n_pos_layers, pos_out_dim=2):
-        self.pos_out_act_layer = nn.Sigmoid()
+        self.pos_out_act_layer = nn.Sigmoid
         self.pos_out_dim = pos_out_dim
         self.n_pos_layers = n_pos_layers
         self.input_dim = input_dim
 
         self.pos_pred = nn.Linear(
             self.input_dim,
-            self.post_out_dim,
+            self.pos_out_dim,
             bias=False)
         self.pre_pos_layers = torch.nn.ModuleList(
             [nn.Linear(self.input_dim, self.pos_out_dim, bias=False) for i in range(self.n_pos_layers)]
@@ -79,7 +79,10 @@ class RASAModel(nn.Module):
         super().__init__()
 
         self.encoder = encoder
-        self.head = RASAHead()
+
+        # TODO: Add parsing of vit size 192, 384, 768, 1024, 1280
+        embed_dim = 384
+        self.head = RASAHead(embed_dim, config.n_pos_layers)
 
     def forward(self, x):
         x = self.encoder(x)
