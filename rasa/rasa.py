@@ -21,28 +21,31 @@ class RASA(pl.LightningModule):
 
         self.config = config
         self.model = RASAModel(config, encoder=encoder)
+        self.train_iters_per_epoch = 10582 // 12
+        # TODO: Set global batch size
 
-    def configure_optimizers(self, config, model : nn.Module):
+
+    def configure_optimizers(self):
         # Freeze rest of head and encoder
-        for name, param in model.head.named_parameters():
+        for name, param in self.model.head.named_parameters():
             if not name.startswith("pos_pred"):
                 param.requires_grad_(False)
-        for param in model.encoder.parameters():
+        for param in self.model.encoder.parameters():
             param.requires_grad_(False)
 
         # TODO: Exclude norm and bias for weight decay?
         head_params_named = [
             param
-            for name, param in model.head.named_parameters()
+            for name, param in self.model.head.named_parameters()
             if name.startswith("pos_pred")
         ]
-        params = [{"params": head_params_named, "lr": config.lr_head}]
+        params = [{"params": head_params_named, "lr": self.config.lr_head}]
 
         optimizer = torch.optim.AdamW(params, weight_decay=0.)
         scheduler = CosineAnnealingLR(
             optimizer,
-            T_max=config.train_iters_per_epoch * config.epochs,
-            eta_min=config.final_lr,
+            T_max=self.train_iters_per_epoch * self.config.epochs,
+            eta_min=self.config.final_lr,
         )
 
         return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
@@ -60,12 +63,15 @@ class RASA(pl.LightningModule):
 
     
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> float:
-        out_dict = self.backbone.forward_features(batch)
+        
+        # print(batch[0].shape, batch[1].shape)
+        out_dict = self.model.encoder.forward_features(batch[0])
         x = out_dict["x_norm_patchtokens"]
+        print(x.shape)
         ps = x.shape[1]
         bs = x.shape[0]
-        x = self.head.forward(x, use_pos_pred=False, return_pos_info=False)
-        y = self.head.forward_pos_pred(x)  # shape: (B, N, D) -> (B, N, 2)
+        x = self.model.head.forward(x, use_pos_pred=False, return_pos_info=False)
+        y = self.model.head.forward_pos_pred(x)  # shape: (B, N, D) -> (B, N, 2)
         # Create the target positions
         ps_1d = int(math.sqrt(ps))
         r = torch.arange(ps_1d, device=x.device, dtype=torch.float) / (ps_1d - 1)
@@ -82,18 +88,18 @@ class RASA(pl.LightningModule):
         # Mean Squared Error between the predicted position and the actual position
         loss = F.mse_loss(y, tgt.to(device=x.device))
 
-        self.log(
-            "lr_heads",
-            self.optimizers().param_groups[1]["lr"],
-            on_step=True,
-            on_epoch=False,
-        )  # TODO: Maybe the number of the param group is not now 2 because we removed the backbone weoghts
-        self.log(
-            "weight_decay",
-            self.optimizers().param_groups[0]["weight_decay"],
-            on_step=True,
-            on_epoch=False,
-        )
+        # self.log(
+        #     "lr_heads",
+        #     self.optimizers().param_groups[1]["lr"],
+        #     on_step=True,
+        #     on_epoch=False,
+        # )  # TODO: Maybe the number of the param group is not now 2 because we removed the backbone weoghts
+        # self.log(
+        #     "weight_decay",
+        #     self.optimizers().param_groups[0]["weight_decay"],
+        #     on_step=True,
+        #     on_epoch=False,
+        # )
         self.log("train_loss", loss, on_step=True, on_epoch=False)
         return loss
 

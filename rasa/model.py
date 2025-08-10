@@ -4,7 +4,9 @@ import torch.nn as nn
 
 class RASAHead(nn.Module):
     def __init__(self, input_dim, n_pos_layers, pos_out_dim=2):
-        self.pos_out_act_layer = nn.Sigmoid
+        super().__init__()
+        
+        self.pos_out_act_layer = nn.Sigmoid()
         self.pos_out_dim = pos_out_dim
         self.n_pos_layers = n_pos_layers
         self.input_dim = input_dim
@@ -29,16 +31,21 @@ class RASAHead(nn.Module):
         """
         if self.n_pos_layers > 0:
             for _, l in enumerate(self.pre_pos_layers):
-                x_pos, x = self.decompose_pos(x, ll_weight=l.weight)  # the x will be the input to the next layer
+                x_pos, x = self.decompose_pos_2D(x, ll_weight=l.weight)  # the x will be the input to the next layer
 
         if use_pos_pred == True:
             # Use the last layer to remove the positional information
-            x_pos, x = self.decompose_pos(x, ll_weight=self.pos_pred.weight)
+            x_pos, x = self.decompose_pos_2D(x, ll_weight=self.pos_pred.weight)
 
         if return_pos_info:
             return x_pos, x
         return x
-    
+
+    def forward_pos_pred(self, x):
+        y = self.pos_pred(x)
+        y = self.pos_out_act_layer(y)
+        return y
+     
     @staticmethod
     def decompose_pos_2D(x, ll_weight) -> torch.Tensor | torch.Tensor:
         bs = x.shape[0]

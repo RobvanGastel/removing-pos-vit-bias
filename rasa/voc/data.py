@@ -1,10 +1,67 @@
-import os
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Tuple
 
+import numpy as np
+from PIL import Image
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 from torchvision.datasets import VOCSegmentation
 
+
+class VOCSeg(VOCSegmentation):
+    def __init__(
+        self,
+        root: str,
+        year: str = "2012",
+        image_set: str = "train",
+        download: bool = False,
+        transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
+    ) -> None:
+        super().__init__(
+            root=root,
+            year=year,
+            image_set=image_set,
+            download=download,
+            transform=transform,
+            target_transform=target_transform,
+        )
+
+    def __getitem__(self, index: int) -> Tuple[Any, Any]:
+        """
+        The overridden __getitem__ method.
+        It fetches the image and mask and applies the transforms.
+        """
+        # Fetch the image and mask using the original implementation
+        img = self.images[index]
+        mask = self.masks[index]
+
+        img = np.array(Image.open(img).convert("RGB"))
+        mask = np.array(Image.open(mask))
+        # img = to_tensor(img)
+        # mask = to_tensor(mask)
+
+        # Apply the image transform if provided
+        # if self.transform is not None:
+        #     img = self.transform(img)
+
+        # if self.transform is not None:
+        #     # Albumentations expects a dictionary as input
+        #     augmented = self.transform(image=img, mask=mask)
+        #     img = augmented['image']
+        #     mask = augmented['mask']
+
+        if self.transform is not None:
+            transformed = self.transform(image=img, mask=mask)
+            img, mask = transformed["image"], transformed["mask"]
+
+        # if self.target_transform is not None:
+        #     mask = self.target_transform(image=mask)['image']
+
+        # Apply the target transform if provided
+        # if self.target_transform is not None:
+        #     mask = self.target_transform(mask)
+
+        return img, mask
 
 class VOCDataModule(pl.LightningDataModule):
 
@@ -52,35 +109,20 @@ class VOCDataModule(pl.LightningDataModule):
         self.year = year
         self.download = download
 
-        def _to_tv_split(s: str) -> str:
-            if "val" in s:
-                return "val"
-            if "train" in s:  # includes "trainaug"
-                return "train"
-            raise ValueError(f"Unsupported split: {s}")
-
         # Train dataset: choose between joint transforms vs image-only transform
-        tv_train = _to_tv_split(train_split)
-        if self.return_masks:
-            self.voc_train = VOCSegmentation(
-                root=self.root, year=self.year, image_set="train",
-                transforms=self.train_image_transform, download=False
-            )
-        else:
-            self.voc_train = VOCSegmentation(
-                root=self.root, year=self.year, image_set="train",
-                transform=self.train_image_transform, download=False
-            )
+        self.voc_train = VOCSeg(
+            root=self.root, year=self.year, image_set="train",
+            transform=self.train_image_transform, download=False
+        )
 
         # Val dataset: always return (img, mask)
-        tv_val = _to_tv_split(val_split)
         if self.val_transforms is not None:
-            self.voc_val = VOCSegmentation(
+            self.voc_val = VOCSeg(
                 root=self.root, year=self.year, image_set="train",
                 transforms=self.val_transforms,  download=False
             )
         else:
-            self.voc_val = VOCSegmentation(
+            self.voc_val = VOCSeg(
                 root=self.root, year=self.year, image_set="train",
                 transform=self.val_image_transform,
                 target_transform=self.val_target_transform,
