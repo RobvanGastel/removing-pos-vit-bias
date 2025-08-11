@@ -21,9 +21,7 @@ class RASA(pl.LightningModule):
 
         self.config = config
         self.model = RASAModel(config, encoder=encoder)
-        self.train_iters_per_epoch = 10582 // 12
-        # TODO: Set global batch size
-
+        self.train_iters_per_epoch = config.n_samples // config.batch_size
 
     def configure_optimizers(self):
         # Freeze rest of head and encoder
@@ -63,15 +61,14 @@ class RASA(pl.LightningModule):
 
     
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> float:
-        
-        # print(batch[0].shape, batch[1].shape)
-        out_dict = self.model.encoder.forward_features(batch[0])
+        out_dict = self.model.encoder.forward_features(batch["images"])
         x = out_dict["x_norm_patchtokens"]
-        print(x.shape)
+
         ps = x.shape[1]
         bs = x.shape[0]
         x = self.model.head.forward(x, use_pos_pred=False, return_pos_info=False)
         y = self.model.head.forward_pos_pred(x)  # shape: (B, N, D) -> (B, N, 2)
+        
         # Create the target positions
         ps_1d = int(math.sqrt(ps))
         r = torch.arange(ps_1d, device=x.device, dtype=torch.float) / (ps_1d - 1)

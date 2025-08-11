@@ -53,12 +53,12 @@ class RASAHead(nn.Module):
         pos_vr = ll_weight[0]  # shape: (D)
         pos_vc = ll_weight[1]  # shape: (D)
 
-        # For 3-dimensional we could use the cross-product that gives us the normal vector perpendicular to the plane.
-        # For n-dimensional vectors, the logic remains the same, but we need to account for the dimensionality when
-        # calculating the normal vector.
-        # In n-dimensions, the plane defined by two vectors A and B does not have a single normal vector but rather
-        # a normal subspace. For this case, we compute the projection of v onto the subspace spanned by A and B using
-        # the Gram-Schmidt process.
+        # For 3-dimensional we could use the cross-product that gives us the normal vector
+        # perpendicular to the plane. For n-dimensional vectors, the logic remains the same,
+        # but we need to account for the dimensionality when calculating the normal vector.
+        # In n-dimensions, the plane defined by two vectors A and B does not have a single
+        # normal vector but rather a normal subspace. For this case, we compute the projection
+        # of v onto the subspace spanned by A and B using the Gram-Schmidt process.
 
         # Step 1: Normalize the vectors pos_vr and pos_vc
         pos_vr = pos_vr / torch.norm(pos_vr)

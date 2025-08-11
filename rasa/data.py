@@ -1,70 +1,162 @@
+from typing import Any, Callable, Optional
 
-import random
-from PIL import Image, ImageFilter
-
-from torchvision.transforms import (
-    ColorJitter,
-    Compose,
-    Normalize,
-    RandomApply,
-    RandomGrayscale,
-    RandomHorizontalFlip,
-    RandomResizedCrop,
-    RandomRotation,
-    RandomVerticalFlip,
-    Resize,
-    ToTensor,
-)
-from torchvision.transforms.functional import InterpolationMode
-
-import cv2
+import numpy as np
+from PIL import Image
+import pytorch_lightning as pl
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
-
-from rasa.voc.data import VOCDataModule, TrainXVOCValDataModule
-
-import torch
-import torchvision.transforms.functional as F
-
-def gaussian_blur(img, sigma):
-    """
-    Applies Gaussian blur to a PyTorch tensor image.
-
-    Args:
-        img (torch.Tensor): A PyTorch tensor representing the image.
-        sigma (float): The standard deviation of the Gaussian kernel.
-
-    Returns:
-        torch.Tensor: The blurred image tensor.
-    """
-    # The torchvision.transforms.functional.gaussian_blur function
-    # requires an odd kernel size. We'll use a standard one.
-    kernel_size = int(2 * sigma) * 2 + 1
-    return F.gaussian_blur(img, kernel_size, [sigma, sigma])
+from torch.utils.data import DataLoader
+from torchvision.datasets import VOCSegmentation as VOCBaseSeg
 
 
-def get_training_data(config) -> TrainXVOCValDataModule:
+class VOCDataModule(pl.LightningDataModule):
+
+    CLASS_IDX_TO_NAME = [
+        "background", "aeroplane", "bicycle", "bird", "boat",
+        "bottle", "bus", "car", "cat", "chair", "cow",
+        "diningtable", "dog", "horse", "motorbike", "person",
+        "pottedplant", "sheep", "sofa", "train", "tvmonitor",
+    ]
+
+    def __init__(
+        self,
+        data_dir: str,
+        batch_size: int,
+        num_workers: int,
+        val_transform: Optional[Callable] = None,
+        train_transform: Optional[Callable] = None,
+        shuffle: bool = False,
+        year: str = "2012",
+        return_masks: bool = False,
+        drop_last: bool = False,
+        download: bool = False,
+    ):
+        """
+        Uses torchvision.datasets.VOCSegmentation. If 
+        return_masks=False, the training dataset applies
+        `transform` to images only. For joint img+mask
+        transforms, pass them via `transforms`.
+        """
+        super().__init__()
+        self.year = year
+        self.shuffle = shuffle
+        self.download = download
+        self.drop_last = drop_last
+        self.return_masks = return_masks
+        self.root = data_dir  # expects <data_dir>/VOC2012 or <data_dir>/VOCdevkit/VOC2012
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.train_transform = train_transform
+        self.val_transform = val_transform
+
+        # Train dataset
+        self.voc_train = VOCSegmentation(
+            root=self.root, year=self.year, image_set="train",
+            transform=self.train_transform, download=self.download
+        )
+
+        # Val dataset: always return (img, mask)
+        if self.val_transform is not None:
+            self.voc_val = VOCSegmentation(
+                root=self.root, year=self.year, image_set="val",
+                transform=self.val_transform,  download=self.download
+            )
+        else:
+            self.voc_val = VOCSegmentation(
+                root=self.root, year=self.year, image_set="val",
+                transform=self.val_transform, download=self.download
+            )
+
+    def __len__(self):
+        return len(self.voc_train)
+
+    def class_id_to_name(self, i: int):
+        return self.CLASS_IDX_TO_NAME[i]
+
+    def setup(self, stage: Optional[str] = None):
+        return
+
+    def train_dataloader(self):
+        return DataLoader(
+            self.voc_train,
+            batch_size=self.batch_size,
+            shuffle=self.shuffle,
+            num_workers=self.num_workers,
+            drop_last=self.drop_last,
+            pin_memory=True,
+        )
+
+    def val_dataloader(self):
+        return DataLoader(
+            self.voc_val,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=self.num_workers,
+            drop_last=self.drop_last,
+            pin_memory=True,
+        )
+
+    def get_train_dataset_size(self):
+        return len(self.voc_train)
+
+    def get_val_dataset_size(self):
+        return len(self.voc_val)
+
+    def get_num_classes(self):
+        return len(self.CLASS_IDX_TO_NAME)
+
+
+class VOCSegmentation(VOCBaseSeg):
+    def __init__(
+        self,
+        root: str,
+        year: str = "2012",
+        image_set: str = "train",
+        download: bool = False,
+        transform: Optional[Callable] = None,
+    ) -> None:
+        super().__init__(
+            root=root,
+            year=year,
+            image_set=image_set,
+            download=download,
+            transform=transform,
+            target_transform=None,
+        )
+
+    def __getitem__(self, index: int) -> tuple[Any, Any]:
+        # Fetch the image and mask using the original implementation
+        img = self.images[index]
+        mask = self.masks[index]
+
+        img = np.array(Image.open(img).convert("RGB"))
+        mask = np.array(Image.open(mask))
+
+        if self.transform is not None:
+            transformed = self.transform(image=img, mask=mask)
+            img, mask = transformed["image"], transformed["mask"]
+
+        return {"images": img, "masks" : mask }
+
+
+def get_training_data(config) -> VOCDataModule:
     # Extract configurations
     input_size = config.yml["data"]["size_crops"]
-
     min_scale_factor = config.yml["data"].get("min_scale_factor", 0.25)
     max_scale_factor = config.yml["data"].get("max_scale_factor", 1.0)
     blur_strength = config.yml["data"].get("blur_strength", 1.0)
     jitter_strength = config.yml["data"].get("jitter_strength", 0.4)
+    val_size = config.yml["data"]["size_crops_val"]
 
     # Training Augmentation Pipeline
-    # This pipeline is used for training data and includes both geometric and pixel-level augmentations.
-    train_transforms = A.Compose(
+    train_transform = A.Compose(
         [
-            # Crop a random part of the image and resize it to the given size.
             A.RandomResizedCrop(
                 height=input_size,
                 width=input_size,
                 scale=(min_scale_factor, max_scale_factor),
                 p=1.0,
             ),
-            # Randomly change the brightness, contrast, and saturation.
-            # Albumentations takes a tuple for the range [-val, +val].
             A.ColorJitter(
                 brightness=0.8 * jitter_strength,
                 contrast=0.8 * jitter_strength,
@@ -72,85 +164,41 @@ def get_training_data(config) -> TrainXVOCValDataModule:
                 hue=0.2 * jitter_strength,
                 p=0.8,
             ),
-            # Randomly convert the image to grayscale.
             A.ToGray(p=0.2),
-            # Apply Gaussian blur with a random sigma.
             A.GaussianBlur(
                 blur_limit=(3, 7),  # Common kernel size range
                 sigma_limit=(blur_strength * 0.1, blur_strength * 2.0),
                 p=0.5,
             ),
-            # Horizontally flip the image.
             A.HorizontalFlip(p=0.5),
-            # Vertically flip the image.
             A.VerticalFlip(p=0.5),
-            # Randomly rotate the image by 90 degrees.
             A.RandomRotate90(p=0.5),
-            # Normalize the image using the ImageNet mean and standard deviation.
-            # This is applied before converting to a tensor.
             A.Normalize(
                 mean=[0.485, 0.456, 0.406],
                 std=[0.229, 0.224, 0.255],
             ),
-            # Convert the NumPy array to a PyTorch tensor.
             ToTensorV2(),
         ]
     )
 
-    val_size = config.yml["data"]["size_crops_val"]
 
-    # Validation Image Augmentation Pipeline
-    # This pipeline is used for the validation set images.
-    val_image_transforms = A.Compose(
+    val_transform = A.Compose(
         [
-            # Resize the image to the validation size.
             A.Resize(height=val_size, width=val_size),
-            # Normalize the image pixels.
             A.Normalize(
                 mean=[0.485, 0.456, 0.406],
                 std=[0.229, 0.224, 0.225],
             ),
-            # Convert the NumPy arrays to PyTorch tensors.
             ToTensorV2(),
         ]
     )
 
-    # Validation Target Augmentation Pipeline
-    # This pipeline is used for the validation set masks.
-    val_target_transforms = A.Compose(
-        [
-            # Resize the mask to the validation size using nearest neighbor interpolation.
-            A.Resize(
-                height=val_size,
-                width=val_size,
-                interpolation=cv2.INTER_NEAREST,
-            ),
-            # Convert the NumPy arrays to PyTorch tensors.
-            ToTensorV2(),
-        ]
-    )
-    val_data_module = VOCDataModule(
+    data_module = VOCDataModule(
+        data_dir=config.yml["data"]["voc_data_path"],
         batch_size=config.batch_size,
         num_workers=config.num_workers,
-        train_split="trainaug",
-        val_split="val",
-        data_dir=config.yml["data"]["voc_data_path"],
-        train_image_transform=train_transforms,
-        val_image_transform=val_image_transforms,
-        val_target_transform=val_target_transforms,
+        train_transform=train_transform,
+        val_transform=val_transform,
     )
-
-    train_data_module = VOCDataModule(
-        batch_size=config.batch_size,
-        num_workers=config.num_workers,
-        train_split="trainaug",
-        val_split="val",
-        data_dir=config.yml["data"]["voc_data_path"],
-        train_image_transform=train_transforms,
-        val_image_transform=val_image_transforms,
-        val_target_transform=val_target_transforms,
-        drop_last=True,
-    )
-
-    num_images = 10582
-    return TrainXVOCValDataModule(train_data_module, val_data_module), num_images
+    num_images = data_module.get_train_dataset_size()
+    return data_module, num_images
