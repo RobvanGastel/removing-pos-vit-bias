@@ -14,29 +14,33 @@ def post_train_rasa(config : argparse.Namespace, encoder):
 
     prev_model = None
     for i in range(config.start_pos_layers, config.end_pos_layers):
-        config.n_pos_layers = i
+        data_module = get_training_data(config.dataset)
 
-        data_module, config.n_samples = get_training_data(config) 
+        # Set config
+        config.n_pos_layers = i
+        config.num_classes = data_module.get_num_classes()
+        config.n_samples = data_module.get_train_dataset_size()
         model = RASA(config, encoder=encoder)
 
         if prev_model is not None:
-            # TODO: How is this step done?
+            # TODO: double check this step
             print(f"Loading weights from previous model for pos layer {i}.")
             # Setup the new model with the previous model's pre_pos_layers and the pos_pred layer as the
             # new pre_pos_layers and create a newly initialized pos_pred layer
             # 1) Move the pos_pred layer to the list of pre_pos_layers in the current model
-            prev_model.head.pre_pos_layers.append(prev_model.head.pos_pred)
+            prev_model.model.head.pre_pos_layers.append(prev_model.model.head.pos_pred)
             # 2) Reinitialize the pos_pred layer from the previous model
-            prev_model.head.pos_pred = model.head.pos_pred
+            prev_model.model.head.pos_pred = model.model.head.pos_pred
             # 3) Load the state dict of the previous model's head to the current model's head
-            msg = model.head.load_state_dict(prev_model.head.state_dict(), strict=False)
+            msg = model.model.head.load_state_dict(prev_model.model.head.state_dict(), strict=False)
             print(
                 f"Loaded Updated Previous Model Weights to a newly one for pos layer {i}:",
                 msg,
             )
 
         trainer = Trainer(
-            check_val_every_n_epoch=1,
+            default_root_dir=config.output,
+            check_val_every_n_epoch=config.check_val_every,
             max_epochs=config.epochs,
             accelerator="cuda",
             fast_dev_run=False,
@@ -48,9 +52,9 @@ def post_train_rasa(config : argparse.Namespace, encoder):
             callbacks=[
                 ModelCheckpoint(
                     dirpath=config.output,
-                    save_top_k=-1,
+                    save_top_k=0,
+                    save_last=True,
                     verbose=True,
-                    save_on_train_epoch_end=True,
                 )
             ]
         )
@@ -58,6 +62,8 @@ def post_train_rasa(config : argparse.Namespace, encoder):
         trainer.fit(model, datamodule=data_module)
         # Iterate this process
         prev_model = model
+
+    # TODO: Integrate removal of positional bias dimensions
 
 
 if __name__ == "__main__":
@@ -76,26 +82,24 @@ if __name__ == "__main__":
     )
     config = parser.parse_args()
 
-    # TODO: Configurable
-    encoder = torch.hub.load(
-        repo_or_dir="facebookresearch/dinov2",
-        model=f"dinov2_vits14_reg",
-    ).cuda()
-
-    # TODO: Add to yml config
-    config.seed = 42
-    config.start_pos_layers = 0
-    config.end_pos_layers = 22
-    config.lr_head = 0.0002
-    config.final_lr = 0.
-    config.weight_decay = 0.
-    config.epochs = 9
-    config.num_workers = 8
-    config.batch_size = 8
-    config.output = f"./logs/output/{config.exp_name}"
-
+    # Load data, train, encoder config
     with open(config.path, "r") as f:
         data = yaml.safe_load(f)
-    config.yml = data
+
+    for k, v in data["train"].items():
+        setattr(config, k, v)
+    config.dataset = data["data"]
+
+    # Load DINOv2, DINOv3 encoder dynamically
+    # TODO: Extend to other torch loads
+    encoder_args = dict(
+        repo_or_dir=data["encoder"]["repo_or_dir"],
+        model=data["encoder"]["model"]
+    )
+    if "source" in data["encoder"]:
+        encoder_args["source"] = data["encoder"]["source"]
+    if data["encoder"].get("weights"):
+        encoder_args["weights"] = data["encoder"]["weights"]
+    encoder = torch.hub.load(**encoder_args).cuda()
 
     post_train_rasa(config, encoder)

@@ -2,15 +2,47 @@ from typing import Any, Callable, Optional
 
 import numpy as np
 from PIL import Image
-import pytorch_lightning as pl
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
+import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 from torchvision.datasets import VOCSegmentation as VOCBaseSeg
 
 
-class VOCDataModule(pl.LightningDataModule):
+class VOCSegmentation(VOCBaseSeg):
+    def __init__(
+        self,
+        root: str,
+        year: str = "2012",
+        image_set: str = "train",
+        download: bool = False,
+        transform: Optional[Callable] = None,
+    ) -> None:
+        super().__init__(
+            root=root,
+            year=year,
+            image_set=image_set,
+            download=download,
+            transform=transform,
+            target_transform=None,
+        )
 
+    def __getitem__(self, index: int) -> tuple[Any, Any]:
+        # Fetch the image and mask using the original implementation
+        img = self.images[index]
+        mask = self.masks[index]
+
+        img = np.array(Image.open(img).convert("RGB"))
+        mask = np.array(Image.open(mask))
+
+        if self.transform is not None:
+            transformed = self.transform(image=img, mask=mask)
+            img, mask = transformed["image"], transformed["mask"]
+
+        return {"images": img, "masks" : mask }
+
+
+class VOCDataModule(pl.LightningDataModule):
     CLASS_IDX_TO_NAME = [
         "background", "aeroplane", "bicycle", "bird", "boat",
         "bottle", "bus", "car", "cat", "chair", "cow",
@@ -106,49 +138,16 @@ class VOCDataModule(pl.LightningDataModule):
         return len(self.CLASS_IDX_TO_NAME)
 
 
-class VOCSegmentation(VOCBaseSeg):
-    def __init__(
-        self,
-        root: str,
-        year: str = "2012",
-        image_set: str = "train",
-        download: bool = False,
-        transform: Optional[Callable] = None,
-    ) -> None:
-        super().__init__(
-            root=root,
-            year=year,
-            image_set=image_set,
-            download=download,
-            transform=transform,
-            target_transform=None,
-        )
-
-    def __getitem__(self, index: int) -> tuple[Any, Any]:
-        # Fetch the image and mask using the original implementation
-        img = self.images[index]
-        mask = self.masks[index]
-
-        img = np.array(Image.open(img).convert("RGB"))
-        mask = np.array(Image.open(mask))
-
-        if self.transform is not None:
-            transformed = self.transform(image=img, mask=mask)
-            img, mask = transformed["image"], transformed["mask"]
-
-        return {"images": img, "masks" : mask }
-
-
-def get_training_data(config) -> VOCDataModule:
+def get_training_data(dataset_config, batch_size, num_workers) -> VOCDataModule:
     # Extract configurations
-    input_size = config.yml["data"]["size_crops"]
-    min_scale_factor = config.yml["data"].get("min_scale_factor", 0.25)
-    max_scale_factor = config.yml["data"].get("max_scale_factor", 1.0)
-    blur_strength = config.yml["data"].get("blur_strength", 1.0)
-    jitter_strength = config.yml["data"].get("jitter_strength", 0.4)
-    val_size = config.yml["data"]["size_crops_val"]
+    input_size = dataset_config["size_crops"]
+    min_scale_factor = dataset_config.get("min_scale_factor", 0.25)
+    max_scale_factor = dataset_config.get("max_scale_factor", 1.0)
+    blur_strength = dataset_config.get("blur_strength", 1.0)
+    jitter_strength = dataset_config.get("jitter_strength", 0.4)
+    val_size = dataset_config["size_crops_val"]
 
-    # Training Augmentation Pipeline
+    # Training augmentation pipeline
     train_transform = A.Compose(
         [
             A.RandomResizedCrop(
@@ -181,7 +180,7 @@ def get_training_data(config) -> VOCDataModule:
         ]
     )
 
-
+    # Validation pipeline
     val_transform = A.Compose(
         [
             A.Resize(height=val_size, width=val_size),
@@ -193,12 +192,13 @@ def get_training_data(config) -> VOCDataModule:
         ]
     )
 
+    # TODO: Make more flexible by passing the dataset object
+    # currently only works for VOC.
     data_module = VOCDataModule(
-        data_dir=config.yml["data"]["voc_data_path"],
-        batch_size=config.batch_size,
-        num_workers=config.num_workers,
+        data_dir=dataset_config["data_path"],
+        batch_size=batch_size,
+        num_workers=num_workers,
         train_transform=train_transform,
         val_transform=val_transform,
     )
-    num_images = data_module.get_train_dataset_size()
-    return data_module, num_images
+    return data_module
