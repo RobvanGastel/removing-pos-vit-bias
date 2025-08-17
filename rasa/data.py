@@ -88,16 +88,10 @@ class VOCDataModule(pl.LightningDataModule):
         )
 
         # Val dataset: always return (img, mask)
-        if self.val_transform is not None:
-            self.voc_val = VOCSegmentation(
-                root=self.root, year=self.year, image_set="val",
-                transform=self.val_transform,  download=self.download
-            )
-        else:
-            self.voc_val = VOCSegmentation(
-                root=self.root, year=self.year, image_set="val",
-                transform=self.val_transform, download=self.download
-            )
+        self.voc_val = VOCSegmentation(
+            root=self.root, year=self.year, image_set="val",
+            transform=self.val_transform, download=self.download
+        )
 
     def __len__(self):
         return len(self.voc_train)

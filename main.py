@@ -2,24 +2,27 @@ import yaml
 import argparse
 
 import torch
+import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
-from pytorch_lightning import Trainer, seed_everything
+from pytorch_lightning.loggers import CSVLogger
 
+trainer = pl.Trainer(
+    logger=csv_logger,
 from rasa import RASA
 from rasa.data import get_training_data
 
 def post_train_rasa(config : argparse.Namespace, encoder):
     torch.set_float32_matmul_precision("medium")
-    seed_everything(config.seed)
+    pl.seed_everything(config.seed)
 
     prev_model = None
     for i in range(config.start_pos_layers, config.end_pos_layers):
-        data_module = get_training_data(config.dataset)
+        datamodule = get_training_data(config.dataset)
 
         # Set config
         config.n_pos_layers = i
-        config.num_classes = data_module.get_num_classes()
-        config.n_samples = data_module.get_train_dataset_size()
+        config.num_classes = datamodule.get_num_classes()
+        config.n_samples = datamodule.get_train_dataset_size()
         model = RASA(config, encoder=encoder)
 
         if prev_model is not None:
@@ -38,7 +41,9 @@ def post_train_rasa(config : argparse.Namespace, encoder):
                 msg,
             )
 
-        trainer = Trainer(
+        csv_logger = CSVLogger(save_dir=config.output, name=config.exp_name)
+        trainer = pl.Trainer(
+            logger=csv_logger,
             default_root_dir=config.output,
             check_val_every_n_epoch=config.check_val_every,
             max_epochs=config.epochs,
@@ -59,7 +64,7 @@ def post_train_rasa(config : argparse.Namespace, encoder):
             ]
         )
 
-        trainer.fit(model, datamodule=data_module)
+        trainer.fit(model, datamodule=datamodule)
         # Iterate this process
         prev_model = model
 

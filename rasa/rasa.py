@@ -21,16 +21,14 @@ class RASA(pl.LightningModule):
         self.save_hyperparameters(ignore=['encoder'])
 
         self.config = config
-        self.model = RASAModel(config, encoder=encoder)
+        self.val_iters = config.val_iters
+        self.n_clusters = config.num_clusters_kmeans_miou
         self.train_iters_per_epoch = config.n_samples // config.batch_size
-        self.val_iters = 10
 
-        # TODO: Define variable
-        self.num_classes = 21
-        # Clusters: [500, 300, 21]
-        self.preds_miou_layer4_x = PredsmIoUKmeans([21], self.num_classes)
-        self.preds_miou_layer4_pos_x = PredsmIoUKmeans([21], self.num_classes)
-        self.preds_miou_layer4_no_pos_x = PredsmIoUKmeans([21], self.num_classes)
+        self.model = RASAModel(config, encoder=encoder)
+        self.preds_miou_x = PredsmIoUKmeans(self.n_clusters, config.num_classes)
+        self.preds_miou_pos_x = PredsmIoUKmeans(self.n_clusters, config.num_classes)
+        self.preds_miou_no_pos_x = PredsmIoUKmeans(self.n_clusters, config.num_classes)
 
 
     def on_train_epoch_start(self):
@@ -150,11 +148,11 @@ class RASA(pl.LightningModule):
         self.val_pos_x_to_x_sim.append(pos_x_to_x_sim.mean())
 
         if self.val_iters is None or batch_idx < self.val_iters:
-            self.segmentation_validation_step(x, batch["masks"], self.preds_miou_layer4_x)
-            self.segmentation_validation_step(x_pos, batch["masks"], self.preds_miou_layer4_pos_x)
-            self.segmentation_validation_step(x_no_pos, batch["masks"], self.preds_miou_layer4_no_pos_x)
+            self.segmentation_validation_step(x, batch["masks"], self.preds_miou_x)
+            self.segmentation_validation_step(x_pos, batch["masks"], self.preds_miou_pos_x)
+            self.segmentation_validation_step(x_no_pos, batch["masks"], self.preds_miou_no_pos_x)
 
-    def segmentation_validation_step(self, embeddings: torch.Tensor, mask: torch.Tensor, preds_miou_layer4) -> None:
+    def segmentation_validation_step(self, embs: torch.Tensor, mask: torch.Tensor, preds_miou) -> None:
         # Validate for self.val_iters. Constrained to only parts of the validation set as mIoU calculation
         # would otherwise take too long.
         with torch.no_grad():
@@ -162,34 +160,34 @@ class RASA(pl.LightningModule):
             bs = mask.size(0)
             gt = mask.float()
 
-            # if self.val_downsample_masks:
-            #     size_masks = 100
-            #     gt = nn.functional.interpolate(gt, size=(size_masks, size_masks), mode="nearest")
-            valid = gt != 255  # mask to remove object boundary class
+            # mask to remove object boundary class
+            valid = gt != 255
 
             # store embeddings, valid masks and gt for clustering after validation end
-            res_w = int(np.sqrt(embeddings.size(1)))
-            embeddings = embeddings.permute(0, 2, 1).reshape(bs, self.model.encoder.embed_dim, res_w, res_w)
-            preds_miou_layer4.update(valid, embeddings, gt)
+            res_w = int(np.sqrt(embs.size(1)))
+            embs = embs.permute(0, 2, 1).reshape(bs, self.model.encoder.embed_dim, res_w, res_w)
+            preds_miou.update(valid, embs, gt)
 
-    def segmentation_validation_epoch_end(self, preds_miou_layer4):
+    def segmentation_validation_epoch_end(self, preds_miou):
         # Trigger computations for rank 0 process
-        res_kmeans = preds_miou_layer4.compute(self.trainer.is_global_zero)
-        preds_miou_layer4.reset()
+        res_kmeans = preds_miou.compute(self.trainer.is_global_zero)
+        preds_miou.reset()
+        
         if res_kmeans is not None:  # res_kmeans is none for all processes with rank != 0
-            tag = "RASA/"
             for k, name, res_k in res_kmeans:
                 miou_kmeans, tp, fp, fn, _, matched_bg = res_k
                 print("miou: ", miou_kmeans)
-                self.log(f"{tag}K={name}_miou_layer4", round(miou_kmeans, 8))
+                self.log(f"val/K={name}_miou", round(miou_kmeans, 8))
+
                 # Log precision and recall values for each class
                 for i, (tp_class, fp_class, fn_class) in enumerate(zip(tp, fp, fn)):
                     class_name = self.trainer.datamodule.class_id_to_name(i)
-                self.log(f"{tag}K={name}_{class_name}_precision", round(tp_class / max(tp_class + fp_class, 1e-8), 8))
-                self.log(f"{tag}K={name}_{class_name}_recall", round(tp_class / max(tp_class + fn_class, 1e-8), 8))
+                
+                self.log(f"val/K={name}_{class_name}_precision", round(tp_class / max(tp_class + fp_class, 1e-8), 8))
+                self.log(f"val/K={name}_{class_name}_recall", round(tp_class / max(tp_class + fn_class, 1e-8), 8))
                 if k > self.num_classes:
                     # Log percentage of clusters assigned to background class
-                    self.log(f"{tag}K={name}-percentage-bg-cluster", round(matched_bg, 8))
+                    self.log(f"val/K={name}-percentage-bg-cluster", round(matched_bg, 8))
 
     def on_validation_epoch_end(self) -> None:
         # Average the validation losses
@@ -220,7 +218,7 @@ class RASA(pl.LightningModule):
         self.val_no_pos_x_to_x_sim = []
         self.val_no_pos_x_to_pos_emb_sim = []
         
-        self.segmentation_validation_epoch_end(self.preds_miou_layer4_x)
-        self.segmentation_validation_epoch_end(self.preds_miou_layer4_pos_x)
-        self.segmentation_validation_epoch_end(self.preds_miou_layer4_no_pos_x)
+        self.segmentation_validation_epoch_end(self.preds_miou_x)
+        self.segmentation_validation_epoch_end(self.preds_miou_pos_x)
+        self.segmentation_validation_epoch_end(self.preds_miou_no_pos_x)
             

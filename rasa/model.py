@@ -85,11 +85,7 @@ class RASAModel(nn.Module):
     def __init__(self, config, encoder : nn.Module):
         super().__init__()
         self.encoder = encoder
-
-        # TODO: Add parsing of vit size 192, 384, 768, 1024, 1280
-        # s=384, b=768, 1024
-        embed_dim = 1024
-        self.head = RASAHead(embed_dim, config.n_pos_layers)
+        self.head = RASAHead(encoder.embed_dim, config.n_pos_layers)
 
     def forward(self, x):
         x = self.encoder(x)
