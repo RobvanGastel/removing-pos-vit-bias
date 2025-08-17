@@ -6,8 +6,6 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import CSVLogger
 
-trainer = pl.Trainer(
-    logger=csv_logger,
 from rasa import RASA
 from rasa.data import get_training_data
 

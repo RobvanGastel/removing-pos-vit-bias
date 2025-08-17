@@ -1,15 +1,11 @@
 
 # Simplified configuration from the original codebase.
-data:
-  data_dir: "/data/"
-  dataset_name: "voc" 
+data: # For VOC
+  data_path: "/data"
   size_crops: 518 
   jitter_strength: 0.4
   blur_strength: 1.0
-  min_scale_crops: 0.25
-  max_scale_crops: 1.
   size_crops_val: 224 # Size for val and seg maps
-  data_path: "/data/"
 
 # DINOv3 encoder
 encoder:
