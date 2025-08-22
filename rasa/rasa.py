@@ -8,7 +8,7 @@ import pytorch_lightning as pl
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
-from rasa.model import RASAModel 
+from rasa.model import RASAModel
 from rasa.metrics import PredsmIoUKmeans
 
 class RASA(pl.LightningModule):
@@ -22,6 +22,7 @@ class RASA(pl.LightningModule):
 
         self.config = config
         self.val_iters = config.val_iters
+        self.num_classes = config.num_classes
         self.n_clusters = config.num_clusters_kmeans_miou
         self.train_iters_per_epoch = config.n_samples // config.batch_size
 
@@ -177,7 +178,7 @@ class RASA(pl.LightningModule):
             for k, name, res_k in res_kmeans:
                 miou_kmeans, tp, fp, fn, _, matched_bg = res_k
                 print("miou: ", miou_kmeans)
-                self.log(f"val/K={name}_miou", round(miou_kmeans, 8))
+                self.log(f"val/K={name}_miou", round(miou_kmeans, 8), on_epoch=True, prog_bar=True)
 
                 # Log precision and recall values for each class
                 for i, (tp_class, fp_class, fn_class) in enumerate(zip(tp, fp, fn)):

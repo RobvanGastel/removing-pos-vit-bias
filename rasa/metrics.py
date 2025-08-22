@@ -134,7 +134,6 @@ class PredsmIoU(Metric):
         for i_part in range(0, num_gt):
             jac[i_part] = float(tp[i_part]) / max(float(tp[i_part] + fp[i_part] + fn[i_part]), 1e-8)
 
-        print("IoUs computed")
         return (
             np.mean(jac),
             tp,
@@ -259,6 +258,74 @@ class PredsmIoUKmeans(PredsmIoU):
         self.masks.append(masks)
         self.embeddings.append(embeddings)
         self.gt.append(gt)
+
+    def predict_only(
+        self,
+        is_global_zero: bool,
+        seed: int = 1,
+        remap_to_gt: bool = False,
+        precision_based: bool = False,
+    ):
+        """
+        Returns predictions for each k in self.num_pred_classes.
+        If remap_to_gt=True, clusters are remapped to GT ids (no IoU is computed/returned).
+
+        Output: List[Tuple[int, np.ndarray]] where each item is (k, preds_1d),
+                preds_1d has length equal to number of valid pixels (mask==True).
+        """
+        if not is_global_zero:
+            return None
+
+        # 1) Prep embeddings to pixel grid
+        embeddings = torch.cat([e.cpu() for e in self.embeddings], dim=0)
+        valid_masks = torch.cat(self.masks, dim=0).cpu().numpy()
+        res_w = valid_masks.shape[2]
+        embeddings = nn.functional.interpolate(embeddings, size=(res_w, res_w), mode="bilinear")
+        embeddings = embeddings.permute(0, 2, 3, 1).reshape(valid_masks.shape[0] * res_w**2, -1).numpy()
+
+        # 2) Normalize + PCA (FAISS)
+        normalized = (embeddings - np.mean(embeddings, axis=0)) / (np.std(embeddings, axis=0, ddof=0) + 1e-5)
+        d_orig = embeddings.shape[1]
+        pca = faiss.PCAMatrix(d_orig, self.pca_dim)
+        pca.train(normalized[: self.num_train_pca])
+        assert pca.is_trained
+        feats = pca.apply_py(normalized)
+
+        # Optional GT (only needed if remapping)
+        if remap_to_gt:
+            gt_flat = torch.cat(self.gt, dim=0).cpu().numpy()[valid_masks]
+
+        results = []
+        for k in self.num_pred_classes:
+            # 3) KMeans for this k
+            kmeans = faiss.Kmeans(
+                self.pca_dim, k, niter=50, nredo=5, seed=seed, verbose=False, gpu=False, spherical=False
+            )
+            kmeans.train(feats)
+            _, pred_labels = kmeans.index.search(feats, 1)  # [N, 1]
+            clusters = pred_labels.squeeze()                # [N]
+
+            # 4) Apply valid mask and flatten
+            pred_flat = clusters.reshape(valid_masks.shape[0], res_w, res_w)[valid_masks]
+
+            if remap_to_gt:
+                # Remap clusters -> GT ids (vectorized LUT)
+                if k == self.num_gt_classes:
+                    rows, cols = self._hungarian_match(k, self.num_gt_classes, pred_flat, gt_flat)
+                    lut = np.zeros(k, dtype=np.int64)  # unmatched -> background 0
+                    lut[cols] = rows
+                    pred_flat = lut[pred_flat.astype(np.int64)]
+                else:
+                    match = self._original_match(k, self.num_gt_classes, pred_flat, gt_flat,
+                                                 precision_based=precision_based)
+                    lut = np.zeros(k, dtype=np.int64)
+                    for gt_id, pred_ids in match.items():
+                        lut[np.array(pred_ids, dtype=np.int64)] = int(gt_id)
+                    pred_flat = lut[pred_flat.astype(np.int64)]
+
+            results.append((k, pred_flat.astype(np.int64)))
+
+        return results
 
     def compute(self, is_global_zero: bool, seed=1) -> List[any]:
         if is_global_zero:

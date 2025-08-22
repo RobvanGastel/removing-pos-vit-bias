@@ -15,7 +15,7 @@ def post_train_rasa(config : argparse.Namespace, encoder):
 
     prev_model = None
     for i in range(config.start_pos_layers, config.end_pos_layers):
-        datamodule = get_training_data(config.dataset)
+        datamodule = get_training_data(config.dataset, config.batch_size, config.num_workers)
 
         # Set config
         config.n_pos_layers = i
@@ -67,7 +67,36 @@ def post_train_rasa(config : argparse.Namespace, encoder):
         prev_model = model
 
     # TODO: Integrate removal of positional bias dimensions
+    def build_rasa_matrix(head) -> torch.Tensor:
+        """Construct effective linear map L from all pre_pos_layers + pos_pred."""
+        D = head.input_dim
+        L = torch.eye(D, device=head.pos_pred.weight.device)
 
+        layers = list(head.pre_pos_layers) + [head.pos_pred]
+        for ll in layers:
+            # Extract row + col vectors
+            vr = ll.weight[0] / ll.weight[0].norm()
+            vc = ll.weight[1] / ll.weight[1].norm()
+
+            # Gram–Schmidt orthogonalize
+            vc = vc - (vr @ vc) * vr
+            vc = vc / vc.norm()
+
+            # Projector onto span{vr, vc}
+            P = torch.outer(vr, vr) + torch.outer(vc, vc)
+
+            # RASA update: I − P
+            Lt = torch.eye(D, device=vr.device) - P
+            L = Lt @ L  # compose left-to-right
+        return L
+
+    L = build_rasa_matrix(prev_model.model.head)
+
+    final_fc = prev_model.model.head  # assume encoder head is nn.Linear [K x D]
+    with torch.no_grad():
+        final_fc.weight.copy_(final_fc.weight @ L.T)  # fold L
+
+    torch.save(prev_model, "integrated.pt")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Experiment Configuration")
@@ -80,7 +109,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--path",
         type=str,
-        default="./configs/rasa_baseline.yml",
+        default="./configs/rasa.yml",
         help="Post-training RASA setup"
     )
     config = parser.parse_args()
@@ -106,3 +135,5 @@ if __name__ == "__main__":
     encoder = torch.hub.load(**encoder_args).cuda()
 
     post_train_rasa(config, encoder)
+
+
