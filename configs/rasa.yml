@@ -1,7 +1,7 @@
 
 # Simplified configuration from the original codebase.
 data: # For VOC
-  data_path: "/data"
+  data_path: "/data/"
   size_crops: 518 
   jitter_strength: 0.4
   blur_strength: 1.0
@@ -10,9 +10,9 @@ data: # For VOC
 # DINOv3 encoder
 encoder:
   repo_or_dir: facebookresearch/dinov3
-  model: dinov3_vitl16
+  model: dinov3_vitb16
   source: github
-  weights: weights/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth
+  weights: weights/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth
 
 # DINOv2 encoder
 # encoder:
@@ -23,15 +23,15 @@ encoder:
 
 train:
   seed: 42
-  epochs: 8
+  epochs: 12
   num_workers: 8
   batch_size: 32
   start_pos_layers: 0
-  end_pos_layers: 22
-  check_val_every: 8
+  end_pos_layers: 12
+  check_val_every: 12
   lr_head: 0.0002
   final_lr: 0.0
   weight_decay: 0.0 # Ignore decay like in the original work.
-  output: ./logs/output/rasa_baseline
+  output: ./logs/output
   val_iters: 10
   num_clusters_kmeans_miou: [21] # Test for multiple clusters, 500, 300. 
