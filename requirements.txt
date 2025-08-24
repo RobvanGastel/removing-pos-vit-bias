@@ -1,0 +1,10 @@
+torch
+torchvision
+torchmetrics
+lightning
+matplotlib
+albumentations
+faiss-cpu
+scipy
+pillow
+pyyaml

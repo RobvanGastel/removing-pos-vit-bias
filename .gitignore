@@ -5,3 +5,4 @@ __pycache__/
 # Training data and model weights
 data/
 weights/
+logs/

@@ -1,26 +1,42 @@
 # Post-Training to Remove Positional Bias
-Using Franca's RASA (Venkataramanan et al., 2025) to remove positional bias in of other SSL pretrained ViTs is simple and provides an increase in this downstream performance. I evaluated the performance with OverClustering (Ziegler & Asano, 2022) and obtain a 1-3% performance boost on the validation set for different ViT model sizes. Since the original codebase for RASA is not easy to reuse I adjusted it to easily put in any pre-trained encoder. 
+Using Franca's "Removal of Absolute Spatial Attributes" Post-Training (RASA) (Venkataramanan et al., 2025) to remove positional bias in of other SSL pretrained ViTs is simple and provides an increase in this downstream performance. I evaluated the performance with OverClustering (Ziegler & Asano, 2022) and obtain a 1-3% performance boost on the validation set for different ViT model sizes. Since the original codebase for RASA is not easy to reuse I adjusted it to easily put in any pre-trained encoder. I have observed an increase in performance for the DINOv2, DINOv3 encoders.
 
-I have observed a increase in DINOv2, DINOv3 so far.
 
 ![](/assets/market_cosine_sim.png?raw=true)
 
+<p>
+    <a href= "https://colab.research.google.com/github/RobvanGastel/removing-pos-vit-bias/blob/main/visualization.ipynb">
+    <img src="https://colab.research.google.com/assets/colab-badge.svg"/></a>
+</p>
 
-Things I still want to try and improve:
+This image displays patch cosine similarity between a selected patch token and the other patches, like on page 4 of the DINOv3 paper (Siméoni et al., 2025). This quantative evaluation helps us see how well it can distinguish between object types in the image. In the `visualization.ipynb` I evaluate what encoder size and RASA post-training does to the performance of the model. Smaller models still struggle to produce good cosine similarities. See the `visualization.ipynb` notebook or test it for yourself in Google collab.
+
+Things I am still evaluating:
 - Measure linear segmentation performance with RASA post-training.
 - Evaluate performance different datasets for downstream and post-training.
 - Can post-training with gram anchorring of DINOv3s distilled models also improve scaling to higher resolution images.
 
+## Setup
+Install the packages using the `requirements.txt` file.
+
+```bash
+# using conda
+conda create --name dino python=3.11
+conda activate dino
+# Run the code, adjust the ./configs/rasa.yml or argparse flags
+python main.py --exp_name "rasa_vits"
+```
+
 ## Results
 
-**Pascal VOC** 
-Performance on the Pascal VOC2012 validation set with ViT-S for OverClustering (Ziegler & Asano, 2022).
+**Pascal VOC2012** \
+Performance on the validation set with the DINOv3 ViT-S encoder for OverClustering (Ziegler & Asano, 2022) with k={21, 100, 300}.
 <table style="margin: auto; border-collapse: collapse;">
   <thead>
     <tr>
       <th style="padding:6px 10px;">k</th>
       <th style="padding:6px 10px;">Validation mIoU</th>
-      <th style="padding:6px 10px;">RASA Validation mIoU</th>
+      <th style="padding:6px 10px;">with RASA Validation mIoU</th>
       <th style="padding:6px 10px;">Δ vs Original</th>
     </tr>
   </thead>
@@ -46,14 +62,14 @@ Performance on the Pascal VOC2012 validation set with ViT-S for OverClustering (
   </tbody>
 </table>
 
-Performance on the Pascal VOC2012 validation set with ViT-B for OverClustering (Ziegler & Asano, 2022).
+Performance on the validation set with the DINOv3 ViT-B encoder for OverClustering (Ziegler & Asano, 2022) with k={21, 100, 300}.
 
 <table style="margin: auto; border-collapse: collapse;">
   <thead>
     <tr>
       <th style="padding:6px 10px;">k</th>
       <th style="padding:6px 10px;">Validation mIoU</th>
-      <th style="padding:6px 10px;">RASA Validation mIoU</th>
+      <th style="padding:6px 10px;">with RASA Validation mIoU</th>
       <th style="padding:6px 10px;">Δ vs Original</th>
     </tr>
   </thead>
