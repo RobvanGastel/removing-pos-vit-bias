@@ -2,14 +2,52 @@ import math
 import argparse
 
 import torch
-import numpy as np
 from torch import nn
+import numpy as np
 import pytorch_lightning as pl
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from rasa.model import RASAModel
 from rasa.metrics import PredsmIoUKmeans
+
+
+def build_rasa_matrix(head) -> torch.Tensor:
+    """Build effective RASA linear operator L (DxD).
+    """
+    D = head.input_dim
+    device = head.pos_pred.weight.device
+    L = torch.eye(D, device=device)
+
+    # Equation from the Franca paper
+    layers = list(head.pre_pos_layers) + [head.pos_pred]
+    for ll in layers:
+        vr = ll.weight[0] / ll.weight[0].norm()
+        vc = ll.weight[1] / ll.weight[1].norm()
+
+        vc = vc - (vr @ vc) * vr
+        vc = vc / vc.norm()
+
+        P = torch.outer(vr, vr) + torch.outer(vc, vc)
+        Lt = torch.eye(D, device=device) - P
+        L = Lt @ L
+    return L
+
+
+def integrate_rasa_into_encoder(encoder: nn.Module, head) -> None:
+    """
+    Replace encoder.head (nn.Identity) with a Linear layer that
+    folds in the RASA transformation.
+    """
+    L = build_rasa_matrix(head)  # D×D
+    D = L.shape[0]
+
+    # create a new linear head that just applies L
+    new_head = nn.Linear(D, D, bias=False).to(L.device)
+    with torch.no_grad():
+        new_head.weight.copy_(L.T)  # Linear applies x @ W.T
+    encoder.head = new_head
+
 
 class RASA(pl.LightningModule):
     def __init__(
@@ -49,7 +87,7 @@ class RASA(pl.LightningModule):
         for param in self.model.encoder.parameters():
             param.requires_grad_(False)
 
-        # TODO: Exclude norm and bias for weight decay?
+        # Exclude norm and bias for weight decay?
         head_params_named = [
             param
             for name, param in self.model.head.named_parameters()

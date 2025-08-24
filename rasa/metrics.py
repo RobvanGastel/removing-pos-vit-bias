@@ -191,14 +191,14 @@ class PredsmIoU(Metric):
         :return: num_pred x num_gt matrix with A[i, j] being the score if ground-truth class i was matched to
         predicted class j.
         """
-        print("Parallelizing iou computation")
         start = time.time()
         score_mat = [
             self.get_score(pred, gt, c1, c2, precision_based=precision_based)
             for c2 in range(num_pred)
             for c1 in range(num_gt)
         ]
-        print(f"took {time.time() - start} seconds")
+        print(f"Parallelizing iou computation "
+              f"took {time.time() - start} seconds")
         score_mat = np.array(score_mat)
         return score_mat.reshape((num_pred, num_gt)).T
 
@@ -206,8 +206,7 @@ class PredsmIoU(Metric):
         # do hungarian matching. If num_pred > num_gt match will be partial only.
         iou_mat = self.compute_score_matrix(num_pred, num_gt, pred, gt)
         match = linear_sum_assignment(1 - iou_mat)
-        print("Matched clusters to gt classes:")
-        print(match)
+        print("hungarian matches: ", match)
         return match
 
     def _original_match(self, num_pred, num_gt, pred, gt, precision_based=False) -> Dict[int, list]:
@@ -224,7 +223,6 @@ class PredsmIoU(Metric):
         gt_to_matches = defaultdict(list)
         for k, v in preds_to_gts.items():
             gt_to_matches[v].append(k)
-        print("matched clusters to gt classes:")
         return gt_to_matches
 
 
@@ -364,7 +362,7 @@ class PredsmIoUKmeans(PredsmIoU):
 
                 # Filter predictions by valid masks (removes voc boundary gt class)
                 pred_flattened = clusters.reshape(valid_masks.shape[0], res_w, res_w)[valid_masks]
-                # TODO: Uncoment the following line for checking that all clusters are used.
+                # Uncoment the following line for checking that all clusters are used.
                 # assert len(np.unique(pred_flattened)) == k
                 # assert np.max(pred_flattened) == k - 1
 

@@ -24,7 +24,6 @@ def post_train_rasa(config : argparse.Namespace, encoder):
         model = RASA(config, encoder=encoder)
 
         if prev_model is not None:
-            # TODO: double check this step
             print(f"Loading weights from previous model for pos layer {i}.")
             # Setup the new model with the previous model's pre_pos_layers and the pos_pred layer as the
             # new pre_pos_layers and create a newly initialized pos_pred layer
@@ -66,37 +65,6 @@ def post_train_rasa(config : argparse.Namespace, encoder):
         # Iterate this process
         prev_model = model
 
-    # TODO: Integrate removal of positional bias dimensions
-    def build_rasa_matrix(head) -> torch.Tensor:
-        """Construct effective linear map L from all pre_pos_layers + pos_pred."""
-        D = head.input_dim
-        L = torch.eye(D, device=head.pos_pred.weight.device)
-
-        layers = list(head.pre_pos_layers) + [head.pos_pred]
-        for ll in layers:
-            # Extract row + col vectors
-            vr = ll.weight[0] / ll.weight[0].norm()
-            vc = ll.weight[1] / ll.weight[1].norm()
-
-            # Gram–Schmidt orthogonalize
-            vc = vc - (vr @ vc) * vr
-            vc = vc / vc.norm()
-
-            # Projector onto span{vr, vc}
-            P = torch.outer(vr, vr) + torch.outer(vc, vc)
-
-            # RASA update: I − P
-            Lt = torch.eye(D, device=vr.device) - P
-            L = Lt @ L  # compose left-to-right
-        return L
-
-    L = build_rasa_matrix(prev_model.model.head)
-
-    final_fc = prev_model.model.head  # assume encoder head is nn.Linear [K x D]
-    with torch.no_grad():
-        final_fc.weight.copy_(final_fc.weight @ L.T)  # fold L
-
-    torch.save(prev_model, "integrated.pt")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Experiment Configuration")
@@ -123,7 +91,6 @@ if __name__ == "__main__":
     config.dataset = data["data"]
 
     # Load DINOv2, DINOv3 encoder dynamically
-    # TODO: Extend to other torch loads
     encoder_args = dict(
         repo_or_dir=data["encoder"]["repo_or_dir"],
         model=data["encoder"]["model"]
