@@ -30,7 +30,7 @@ python main.py --exp_name "rasa_vits"
 ## Results
 
 **Pascal VOC2012** \
-Performance on the validation set with the DINOv3 ViT-S encoder for OverClustering (Ziegler & Asano, 2022) with k={21, 100, 300}.
+Performance on the validation set with the DINOv3 ViT-S encoder for OverClustering (Ziegler & Asano, 2022) with k={21, 100, 300} on 40/90 batches of the validation set with batch size 16 (due to compute constraints).
 <table style="margin: auto; border-collapse: collapse;">
   <thead>
     <tr>
@@ -56,13 +56,13 @@ Performance on the validation set with the DINOv3 ViT-S encoder for OverClusteri
     <tr>
       <td align="right" style="padding:6px 10px;">300</td>
       <td align="right" style="padding:6px 10px;">59.94%</td>
-      <td align="right" style="padding:6px 10px;">—</td>
-      <td align="right" style="padding:6px 10px;">—</td>
+      <td align="right" style="padding:6px 10px;">59.14%</td>
+      <td align="right" style="padding:6px 10px;">+0.80%</td>
     </tr>
   </tbody>
 </table>
 
-Performance on the validation set with the DINOv3 ViT-B encoder for OverClustering (Ziegler & Asano, 2022) with k={21, 100, 300}.
+Performance on the validation set with the DINOv3 ViT-B encoder for OverClustering (Ziegler & Asano, 2022) with k={21, 100, 300} on 40/90 batches of the validation set with batch size 16 (due to compute constraints).
 
 <table style="margin: auto; border-collapse: collapse;">
   <thead>
@@ -76,24 +76,26 @@ Performance on the validation set with the DINOv3 ViT-B encoder for OverClusteri
   <tbody>
     <tr>
       <td align="right" style="padding:6px 10px;">21</td>
-      <td align="right" style="padding:6px 10px;">-</td>
-      <td align="right" style="padding:6px 10px;">-</td>
-      <td align="right" style="padding:6px 10px;">-</td>
+      <td align="right" style="padding:6px 10px;">20.07%</td>
+      <td align="right" style="padding:6px 10px;">21.56%</td>
+      <td align="right" style="padding:6px 10px;">+1.56%</td>
     </tr>
     <tr>
       <td align="right" style="padding:6px 10px;">100</td>
-      <td align="right" style="padding:6px 10px;">-</td>
-      <td align="right" style="padding:6px 10px;">-</td>
-      <td align="right" style="padding:6px 10px;">-</td>
+      <td align="right" style="padding:6px 10px;">54.22%</td>
+      <td align="right" style="padding:6px 10px;">51.30%</td>
+      <td align="right" style="padding:6px 10px;">+2.92%</td>
     </tr>
     <tr>
       <td align="right" style="padding:6px 10px;">300</td>
-      <td align="right" style="padding:6px 10px;">-</td>
-      <td align="right" style="padding:6px 10px;">—</td>
-      <td align="right" style="padding:6px 10px;">—</td>
+      <td align="right" style="padding:6px 10px;">68.03%</td>
+      <td align="right" style="padding:6px 10px;">66.60%</td>
+      <td align="right" style="padding:6px 10px;">—1.43%</td>
     </tr>
   </tbody>
 </table>
+
+I picked the best weights based on the an intermediate evaluation with $k=21$. Therefore, it might work suboptimal for larger $k$. 
 
 ## References
 Venkataramanan, S., Pariza, V., Salehi, M., Knobel, L., Gidaris, S., Ramzi, E., Bursuc, A., & Asano, Y. M. (2025). Franca: Nested Matryoshka Clustering for Scalable Visual Representation Learning (No. arXiv:2507.14137). arXiv. https://doi.org/10.48550/arXiv.2507.14137
