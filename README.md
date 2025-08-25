@@ -90,7 +90,7 @@ Performance on the validation set with the DINOv3 ViT-B encoder for OverClusteri
       <td align="right" style="padding:6px 10px;">300</td>
       <td align="right" style="padding:6px 10px;">68.03%</td>
       <td align="right" style="padding:6px 10px;">66.60%</td>
-      <td align="right" style="padding:6px 10px;">—1.43%</td>
+      <td align="right" style="padding:6px 10px;">-1.43%</td>
     </tr>
   </tbody>
 </table>
