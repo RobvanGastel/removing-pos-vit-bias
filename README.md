@@ -36,7 +36,7 @@ Performance on the validation set with the DINOv3 ViT-S encoder for OverClusteri
     <tr>
       <th style="padding:6px 10px;">k</th>
       <th style="padding:6px 10px;">Validation mIoU</th>
-      <th style="padding:6px 10px;">with RASA Validation mIoU</th>
+      <th style="padding:6px 10px;">After RASA Post-Training Validation mIoU</th>
       <th style="padding:6px 10px;">Δ vs Original</th>
     </tr>
   </thead>
@@ -55,8 +55,8 @@ Performance on the validation set with the DINOv3 ViT-S encoder for OverClusteri
     </tr>
     <tr>
       <td align="right" style="padding:6px 10px;">300</td>
-      <td align="right" style="padding:6px 10px;">59.94%</td>
       <td align="right" style="padding:6px 10px;">59.14%</td>
+      <td align="right" style="padding:6px 10px;">59.94%</td>
       <td align="right" style="padding:6px 10px;">+0.80%</td>
     </tr>
   </tbody>
@@ -69,7 +69,7 @@ Performance on the validation set with the DINOv3 ViT-B encoder for OverClusteri
     <tr>
       <th style="padding:6px 10px;">k</th>
       <th style="padding:6px 10px;">Validation mIoU</th>
-      <th style="padding:6px 10px;">with RASA Validation mIoU</th>
+      <th style="padding:6px 10px;">After RASA Post-Training Validation mIoU</th>
       <th style="padding:6px 10px;">Δ vs Original</th>
     </tr>
   </thead>
