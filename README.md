@@ -11,11 +11,6 @@ Using Franca's "Removal of Absolute Spatial Attributes" Post-Training (RASA) (Ve
 
 This image displays patch cosine similarity between a selected patch token and the other patches, like on page 4 of the DINOv3 paper (Siméoni et al., 2025). This quantative evaluation helps us see how well it can distinguish between object types in the image. In the `visualization.ipynb` I evaluate what encoder size and RASA post-training does to the performance of the model. Smaller models still struggle to produce good cosine similarities. See the `visualization.ipynb` notebook or test it for yourself in Google collab.
 
-Things I am still evaluating:
-- Measure linear segmentation performance with RASA post-training.
-- Evaluate performance different datasets for downstream and post-training.
-- Can post-training with gram anchorring of DINOv3s distilled models also improve scaling to higher resolution images.
-
 ## Setup
 Install the packages using the `requirements.txt` file.
 
