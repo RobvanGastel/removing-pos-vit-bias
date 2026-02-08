@@ -3,7 +3,7 @@ torchvision
 torchmetrics
 lightning
 matplotlib
-albumentations
+albumentations=1.3.1
 faiss-cpu
 scipy
 pillow

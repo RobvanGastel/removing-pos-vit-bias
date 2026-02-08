@@ -2,8 +2,8 @@ import math
 import argparse
 
 import torch
-from torch import nn
 import numpy as np
+from torch import nn
 import pytorch_lightning as pl
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -52,8 +52,8 @@ def integrate_rasa_into_encoder(encoder: nn.Module, head) -> None:
 class RASA(pl.LightningModule):
     def __init__(
         self,
-        config: argparse.Namespace,
-        encoder
+        config : argparse.Namespace,
+        encoder : nn.Module
     ):
         super().__init__()
         self.save_hyperparameters(ignore=['encoder'])
@@ -68,7 +68,6 @@ class RASA(pl.LightningModule):
         self.preds_miou_x = PredsmIoUKmeans(self.n_clusters, config.num_classes)
         self.preds_miou_pos_x = PredsmIoUKmeans(self.n_clusters, config.num_classes)
         self.preds_miou_no_pos_x = PredsmIoUKmeans(self.n_clusters, config.num_classes)
-
 
     def on_train_epoch_start(self):
         self.val_loss_mse = []
@@ -260,4 +259,7 @@ class RASA(pl.LightningModule):
         self.segmentation_validation_epoch_end(self.preds_miou_x)
         self.segmentation_validation_epoch_end(self.preds_miou_pos_x)
         self.segmentation_validation_epoch_end(self.preds_miou_no_pos_x)
-            
+
+    def on_save_checkpoint(self, checkpoint):
+        checkpoint["state_dict"] = {}   
+        checkpoint["head"] = self.model.head.state_dict()

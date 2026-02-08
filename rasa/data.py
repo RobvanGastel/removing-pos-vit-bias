@@ -145,8 +145,7 @@ def get_training_data(dataset_config, batch_size, num_workers) -> VOCDataModule:
     train_transform = A.Compose(
         [
             A.RandomResizedCrop(
-                height=input_size,
-                width=input_size,
+                size=(input_size, input_size),
                 scale=(min_scale_factor, max_scale_factor),
                 p=1.0,
             ),

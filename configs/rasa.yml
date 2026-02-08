@@ -32,6 +32,6 @@ train:
   lr_head: 0.0002
   final_lr: 0.0
   weight_decay: 0.0 # Ignore decay like in the original work.
-  output: ./logs/output
+  output: ./output
   val_iters: 10
   num_clusters_kmeans_miou: [21] # Test for multiple clusters, 500, 300. 

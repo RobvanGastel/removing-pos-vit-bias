@@ -1,3 +1,4 @@
+import os
 import yaml
 import argparse
 
@@ -100,6 +101,9 @@ if __name__ == "__main__":
     if data["encoder"].get("weights"):
         encoder_args["weights"] = data["encoder"]["weights"]
     encoder = torch.hub.load(**encoder_args).cuda()
+
+    # Create output dir
+    config.output = os.path.join(config.output, config.exp_name)
 
     post_train_rasa(config, encoder)
 
